@@ -1,121 +1,127 @@
-This guide shows how to run a MySQL container with a mounted volume and how to run a Django App container that connects to this database.
+# INSTRUCTION.md
+Цей файл пояснює, як зібрати/запустити MySQL контейнер з томом, як зібрати/запушити образи в Docker Hub (репо midandnight) і як запустити App контейнер, який підключається до MySQL.
+--- 
+Загальні параметри
+- DB name: app_db
+- DB user: app_user
+- DB password: 1234
+- Docker Hub username: midandnight
+- MySQL image name/tag локально: mysql-local:1.0.0
+- App image name/tag локально: todoapp:2.0.0
+- Папка для скріншота в репо: ./screenshots/app_started.png
 
-DB: app_db user: app_user
-DB password: 1234
 
-1. Preparation (one-time setup)
+1) Підготовка
+- Створи мережу (рекомендується):
+  docker network create todonet
 
-Create a Docker network (optional, but convenient):
 
-docker network create todonet
-2. Run MySQL container with a volume
+2) Збірка і пуш MySQL образу
+- Збірка з файлу Dockerfile.mysql:
+  docker build -t mysql-local:1.0.0 -f Dockerfile.mysql .
 
-Assuming you have an image mysql-local:1.0.0, run it like this (container name — mysql-local):
 
-docker run -d \
-  --name mysql-local \
-  --network todonet \
-  -v mysql-data:/var/lib/mysql \
-  -e MYSQL_ROOT_PASSWORD=1234 \
-  -e MYSQL_DATABASE=app_db \
-  -e MYSQL_USER=app_user \
-  -e MYSQL_PASSWORD=1234 \
-  mysql-local:1.0.0
+- Протегай і запуш в Docker Hub:
+  docker tag mysql-local:1.0.0 midandnight/mysql-local:1.0.0
+  docker push midandnight/mysql-local:1.0.0
 
-Wait a few seconds and check logs:
 
-docker logs -f mysql-local
+- Посилання на теги:
+  https://hub.docker.com/r/midandnight/mysql-local/tags
 
-You will see a message when the database is ready to accept connections.
 
-3. Get MySQL container IP (needed for Django config)
+3) Запуск MySQL контейнера з томом
+- Запусти контейнер (створить named volume mysql-data):
+  docker run -d \
+    --name mysql-local \
+    --network todonet \
+    -v mysql-data:/var/lib/mysql \
+    -e MYSQL_ROOT_PASSWORD=1234 \
+    -e MYSQL_DATABASE=app_db \
+    -e MYSQL_USER=app_user \
+    -e MYSQL_PASSWORD=1234 \
+    mysql-local:1.0.0
 
-If you are required to specify an IP, get it with:
 
-docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' mysql-local
+- Перевір логи, щоб дочекатися, поки MySQL підніметься:
+  docker logs -f mysql-local
 
-Example output: 172.18.0.2
 
-NOTE: Alternatively, you can use the container name mysql-local as HOST if containers are in the same Docker network — this is simpler and more reliable. But if IP is required, use the command above.
+- Отримати IP контейнера (якщо необхідно):
+  docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' mysql-local
 
-4. Update Django configuration (todolist/settings.py)
 
-Open todolist/settings.py and in the DATABASES section set the HOST (replace with IP from step 3 or use mysql-local):
+4) Додай залежність в requirements.txt (якщо ще не додано)
+- У requirements.txt має бути рядок:
+  mysql-connector-python==8.2.0
+(це потрібно, щоб Django міг використовувати mysql.connector)
 
+
+5) Налаштування todolist/settings.py (консистентність HOST)
+- Рекомендую робити конфіг DB через змінну оточення, щоб однаково працювало локально і в контейнері.
+  Приклад (суть — прочитати DB_HOST з ENV і мати дефолт 'localhost'):
+
+import os
+DB_HOST = os.environ.get('DB_HOST', 'localhost')
 DATABASES = {
-    'default': {
-        'ENGINE': 'mysql.connector.django',
-        'NAME': 'app_db',
-        'USER': 'app_user',
-        'PASSWORD': '1234',
-        'HOST': '172.18.0.2',  # <- replace with IP or 'mysql-local'
-        'PORT': '',
-    }
+'default': {
+'ENGINE': 'mysql.connector.django',
+'NAME': 'app_db',
+'USER': 'app_user',
+'PASSWORD': '1234',
+'HOST': DB_HOST,
+'PORT': '',
 }
-
-Save the changes.
-
-5. Build/push App image (example)
-
-If you have a local image todoapp:2.0.0, tag it and push to Docker Hub:
-
-docker tag mysql-local:1.0.0 <твій-логін>/mysql-local:1.0.0
-docker push <твій-логін>/mysql-local:1.0.0
+}
+- Якщо ти запускаєш Django на хості (не в контейнері), то можна залишити 'localhost' як HOST і підключитись до MySQL через проброс порту (див. нижче).
+- Якщо запускаєш Django в контейнері — передавай DB_HOST=mysql-local (ім'я контейнера у тій же docker network).
 
 
-# tag & push app image
+6) Збірка і пуш App образу
+- Локальна збірка:
+docker build -t todoapp:2.0.0 .
+
+
+- Тег і пуш в Docker Hub:
 docker tag todoapp:2.0.0 midandnight/todoapp:2.0.0
 docker push midandnight/todoapp:2.0.0
-# Docker Hub URL examples to place in INSTRUCTION.md:
-https://hub.docker.com/r/midandnight/mysql-local/tags
+
+
+- Посилання на теги:
 https://hub.docker.com/r/midandnight/todoapp/tags
+Docker Hub репо (загальна сторінка):
+https://hub.docker.com/r/midandnight/todoapp
 
-Docker Hub link:
 
-https://hub.docker.com/r/midandnight/todoapp/general
-6. Run App container
-Option A — if the image runs server on internal port 8080:
+7) Запуск App контейнера (варіант з Docker network — рекомендую)
+- Запуск, передаючи DB_HOST як ім'я контейнера mysql-local:
 docker run -d \
   --name todoapp \
   --network todonet \
+  -e DB_HOST=mysql-local \
   -p 8000:8080 \
-  <your-dockerhub-username>/todoapp:2.0.0
+  midandnight/todoapp:2.0.0
 
-Open in browser:
-http://localhost:8000
 
-Option B — force run server on port 8000:
-docker run -d \
-  --name todoapp \
-  --network todonet \
-  -p 8000:8000 \
-  --entrypoint python \
-  <your-dockerhub-username>/todoapp:2.0.0 \
-  manage.py runserver 0.0.0.0:8000
+- Якщо в контейнері внутрішній порт інший (наприклад 8000), скоригуй -p локальний:внутрішній та матч entrypoint.
 
-Open:
-http://localhost:8000
 
-If you used MySQL IP (not container name), make sure it hasn’t changed after container restart.
-Best practice — use container name (mysql-local) instead of static IP.
+- Альтернатива — якщо запускаєш Django на хості:
+- Потрібно пробросити порт MySQL з контейнера на хост (наприклад 3306), або підключатись через localhost, якщо контейнер проброшений:
+  docker run -d --name mysql-local -p 3306:3306 ... mysql-local:1.0.0
+- Потім в settings.py використовувати HOST='localhost' (цей варіант менш бажаний для production, але підходить для локальної перевірки).
 
-7. Useful debug commands
 
-Check App logs:
-
-docker logs -f todoapp
-
-Run migrations inside container:
-
+8) Міграції і перевірка логів
+- Виконай міграції (inside container):
 docker exec -it todoapp python manage.py migrate
 
-Check containers status:
 
-docker ps -a
-8. Browser access
+- Перегляд логів:
+docker logs -f todoapp
 
-After successful start, open:
 
+9) Доступ у браузері
+- Якщо пробросив порт як у прикладі (-p 8000:8080), відкрий:
 http://localhost:8000
-If you mapped 8000:8080 → use http://localhost:8000
-If you mapped 8000:8000 → also http://localhost:8000
+
