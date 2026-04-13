@@ -59,8 +59,16 @@ Save the changes.
 
 If you have a local image todoapp:2.0.0, tag it and push to Docker Hub:
 
-docker tag todoapp:2.0.0 <your-dockerhub-username>/todoapp:2.0.0
-docker push <your-dockerhub-username>/todoapp:2.0.0
+docker tag mysql-local:1.0.0 <твій-логін>/mysql-local:1.0.0
+docker push <твій-логін>/mysql-local:1.0.0
+
+
+# tag & push app image
+docker tag todoapp:2.0.0 midandnight/todoapp:2.0.0
+docker push midandnight/todoapp:2.0.0
+# Docker Hub URL examples to place in INSTRUCTION.md:
+https://hub.docker.com/r/midandnight/mysql-local/tags
+https://hub.docker.com/r/midandnight/todoapp/tags
 
 Docker Hub link:
 

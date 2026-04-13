@@ -62,15 +62,16 @@ WSGI_APPLICATION = "todolist.wsgi.application"
 # https://docs.djangoproject.com/en/1.7/ref/settings/#databases
 
 DATABASES = {
-    "default": {
-        "ENGINE": "mysql.connector.django",
-        "NAME": "app_db",
-        "USER": "app_user",
-        "PASSWORD": "1234",
-        "HOST": "172.17.0.3",  # тут твій IP контейнера або ім'я контейнера в мережі
-        "PORT": "",  # або "3306"
+    'default': {
+        'ENGINE': 'mysql.connector.django',
+        'NAME': 'app_db',
+        'USER': 'app_user',
+        'PASSWORD': '1234',
+        'HOST': 'localhost',
+        'PORT': '',
     }
 }
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/1.7/topics/i18n/
